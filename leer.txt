@@ -12,3 +12,6 @@ o copiar
 :- use_package(.(meta_trans)). 
 
 en el archivo propio, que tiene que estar en la misma carpeta que meta_trans y meta_gdl_trans.
+
+No funciona bien con listas, es decir, las traduce a como prolog las trata internamente [a,b] =  (. a (b. [])).
+gdl no usa listas, usar la kb.
