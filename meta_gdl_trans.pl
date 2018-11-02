@@ -10,8 +10,7 @@ to_gdl((:-A),(:-A)).
 to_gdl((A:-B),(P5)):-
 	to_gdl_(96,A,N,A1),
 	to_gdl_(N,B,_M,B1),
-	atom_concat('<=',' (',P1),
-	atom_concat(P1,A1,P2),
+	atom_concat('(<= ',A1,P2),
 	atom_concat(P2,' ',P3),
 	atom_concat(P3,B1,P4),
 	atom_concat(P4,')',P5).
@@ -21,13 +20,20 @@ to_gdl(A,A1):-
 	to_gdl_(96,A,_N,A1).
 
 %sentencias separadas por coma
-to_gdl_(N,(A,B),N2,P5):-
+to_gdl_(N,(A,B,C),N3,NP):-
 	to_gdl_(N,A,N1,A1),
 	to_gdl_(N1,B,N2,B1),
-	atom_concat('(and ',A1,P1),
-	atom_concat(P1,' ',P2),
-	atom_concat(P2,B1,P4),
-	atom_concat(P4,')',P5).
+	atom_concat(A1,' ',P1),
+	atom_concat(P1,B1,P2),
+	to_gdl_(N2,C,N3,C1),
+	atom_concat(P2,' ',P3),
+	atom_concat(P3,C1,NP).
+
+to_gdl_(N,(A,B),N2,NP):-
+	to_gdl_(N,A,N1,A1),
+	to_gdl_(N1,B,N2,B1),
+	atom_concat(A1,' ',P2),
+	atom_concat(P2,B1,NP).
 
 %sentencias separadas por or
 to_gdl_(N,(A;B),N2,P5):-
