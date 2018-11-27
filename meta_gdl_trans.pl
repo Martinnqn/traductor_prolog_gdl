@@ -155,10 +155,17 @@ unificar_valor(N,vzx(X),Var):-
 op_to_pred(+,sum).
 op_to_pred(-,minus).
 op_to_pred(*,mult).
-op_to_pred(+,div).
+op_to_pred(/,div).
 op_to_pred(==,igual).
 op_to_pred(=,igual).
 op_to_pred(\==,distinct).
+op_to_pred(<=,menorIgual).
+op_to_pred(>=,mayorIgual).
+op_to_pred(<,menor).
+op_to_pred(>,mayor).
+op_to_pred(',','').
+op_to_pred(fail,'distinct(0,0)').
+op_to_pred(t,true).
 op_to_pred(Op,Op).
 
 

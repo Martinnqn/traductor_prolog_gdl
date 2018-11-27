@@ -5,120 +5,255 @@
 %package para traducir el programa.
 :- use_package(.(meta_trans)).
 
-%para ejecutar ?-inicio,juego. (Run!)
-
-%roles o y x
+%roles azul y rojo
 role(o).
 role(x).
 
+%marca del owner
+owner(o,0).
+owner(x,*).
+
+%posiciones iniciales de los roles
+initPos(o,1,Col):-
+	cols(Cols),
+	middlePoint(1,Cols,Col).
+initPos(x,Rows,Col):-
+	rows(Rows),
+	cols(Cols),
+	middlePoint(1,Cols,Col).
+
+%role inicial
+initRole(x).
+
+%cantidad de filas y columnas
+rows(9).
+cols(9).
+
+%puntaje con el que se gana
+goalScore(Score):-
+	rows(Rows),
+	cols(Cols),
+	Score is Rows * Cols * 5.
+
+%define dinamicamente los indexX segun cuantas rows hay
+defineIndexX:-
+	rows(Rows),
+	between(1,Rows,X),
+	assert(indexX(X)),
+	fail.
+defineIndexX.
+
+%define dinamicamente los indexY segun cuantas cols hay
+defineIndexY:-
+	cols(Cols),
+	between(1,Cols,Y),
+	assert(indexY(Y)),
+	fail.
+defineIndexY.
+
+middlePoint(X,X1,Average):- 
+    Sum is X + X1,
+    Average is truncate(Sum / 2).
+	
 %estado inicial
-init(cell(1,1,b)).
-init(cell(1,2,b)).
-init(cell(1,3,b)).
-init(cell(2,1,b)).
-init(cell(2,2,b)).
-init(cell(2,3,b)).
-init(cell(3,1,b)).
-init(cell(3,2,b)).
-init(cell(3,3,b)).
-init(control(o)).
+init(cell(X,Y,R)):-initPos(R,X,Y),indexXY(X,Y).
+init(cell(X,Y,b)):-indexXY(X,Y),\+initPos(_,X,Y).
+init(control(R)):-initRole(R).
+init(score(R,0)):-role(R).
+
 
 %posibles valores que pueden tener las relaciones
 base(control(X)):- role(X).
-base(cell(X,Y,b)):- index(X),index(Y).
-base(cell(X,Y,R)):- role(R),index(X),index(Y).
-
-index(1).
-index(2).
-index(3).
+base(cell(X,Y,b)):- indexXY(X,Y).
+base(cell(X,Y,R)):- role(R),indexXY(X,Y).
+base(cell(X,Y,O)):- owner(_,O),indexXY(X,Y).
 
 %posibles valores que pueden tener las entradas
-input(R,mark(X,Y)):- role(R),index(X),index(Y).
 input(R,noop):-role(R).
+input(R,up):-role(R).
+input(R,down):-role(R).
+input(R,left):-role(R).
+input(R,right):-role(R).
 
 %movimientos legales
-legal(W,mark(X,Y)) :-
-	t(cell(X,Y,b)),t(control(W)).
-legal(o,noop) :-
-	t(control(x)).
-legal(x,noop) :-
-      t(control(o)).
+legal(R,noop):-
+	role(R),	%se pone para que instancie R
+	\+t(control(R)).
+legal(R,up):-
+	t(control(R)),
+	t(cell(Row,Col,R)),
+	NewRow is Row - 1,
+	legalMove(NewRow,Col).
+legal(R,down):-
+	t(control(R)),
+	t(cell(Row,Col,R)),
+	NewRow is Row + 1,
+	legalMove(NewRow,Col).
+legal(R,left):-
+	t(control(R)),
+	t(cell(Row,Col,R)),
+	NewCol is Col - 1,
+	legalMove(Row,NewCol).
+legal(R,right):-
+	t(control(R)),
+	t(cell(Row,Col,R)),
+	NewCol is Col + 1,
+	legalMove(Row,NewCol).
+	
+legalMove(X,Y):-	%verifica que el movimiento no lo deje donde esta otro jugador
+	indexXY(X,Y),
+	t(cell(X,Y,R)),
+	\+role(R).
 
-%prÃ³ximo estado
-next(cell(M,N,x)) :-
-      does(x,mark(M,N)),
-      t(cell(M,N,b)).
+%próximo estado
+next(_):-
+	t(control(R)),
+	searchFigure(R),
+	fail.
+	
+%se asigna el role a la siguiente celda
+next(cell(NewX,NewY,R)):-
+	does(R,Act),
+	t(cell(X,Y,R)),
+	move(X,Y,Act,NewX,NewY).
 
-next(cell(M,N,o)) :-
-      does(o,mark(M,N)),
-      t(cell(M,N,b)).
+%marca la casilla que dejo el role
+next(cell(X,Y,Own)):-
+	does(R,Act),
+	changePos(Act),
+	t(cell(X,Y,R)),
+	owner(R,Own).
+	
+%marca las celdas que estan dentro del perimetro
+next(cell(X,Y,Own)):-
+	t(cell(X,Y,C)),
+	\+role(C),
+	isInArea(X,Y),
+	t(control(R)),
+	owner(R,Own).
+	
+%mantiene las celdas como estaban, debe ir luego de calcular todas las
+% emás celdas para no generar mas de un cell por celda
+next(cell(X,Y,M)):-
+	t(cell(X,Y,M)),
+	estado(E),
+	\+h(E,cell(X,Y,_)).	%%modificar. NO SE DEBE USAR EL H
+	
+%cambia el control
+next(control(R)):-
+	role(R),
+	\+t(control(R)).
+	
+%calcula el nuevo score de cada role en los estados par
+next(score(R,NewScore)):-
+	estado(E),
+	0 is mod(E,2),
+	%initRole(R),
+	t(score(R,Score)),
+	owner(R,O),
+	aggregate_all(count, h(E,cell(_,_,O)), ScoreToAdd),
+	NewScore is Score + ScoreToAdd + 1.
+	
+next(score(R,Score)):-
+	estado(E),y
+	1 is mod(E,2),
+	t(score(R,Score)).
 
-next(cell(M,N,W)) :-
-      t(cell(M,N,W)),
-      distinct(W,b).
+%borra el perimetro calculado
+next(_):-
+	retractall(perimeter(_,_)),
+	!,
+	fail.
+	
+%es verdadero para todas las acciones que cambian la posicion del role
+changePos(Act):-Act \== noop.
 
-next(cell(M,N,b)) :-
-      does(_W,mark(J,_K)),
-      t(cell(M,N,b)),
-      distinct(M,J).
+%devuelve la nueva posicion del role al hacer up, down, left o right
+move(X,Y,up,NewX,Y):- NewX is X - 1.
+move(X,Y,down,NewX,Y):- NewX is X + 1.
+move(X,Y,left,X,NewY):- NewY is Y - 1.
+move(X,Y,right,X,NewY):- NewY is Y + 1.
+move(X,Y,noop,X,Y).
 
-next(cell(M,N,b)) :-
-      does(_W,mark(_J,K)),
-      t(cell(M,N,b)),
-      distinct(N,K).
+%%%%%%%%%%%%%%%%%%%%%%%%%% Busca figuras %%%%%%%%%%%%%%%%%%%%%%%%%%
+searchFigure(R):-
+	nextPos(R,X,Y),
+	nextCellOfRole(X,Y,[],R,NextX,NextY),
+	searchFigureAux(X,Y,R,NextX,NextY,[]),
+	retractall(failedCell(_,_)).
+searchFigure(_):-
+	retractall(failedCell(_,_)),
+	fail.
 
-next(control(o)) :-
-      t(control(x)).
+%auxiliar para que la primer celda no vuelva directamente al Init
+searchFigureAux(InitX,InitY,R,X,Y,Perimeter):-
+	nextCellOfRole(X,Y,Perimeter,R,NextX,NextY),
+	(InitX \== NextX ; InitY \== NextY),
+	searchInit(InitX,InitY,R,NextX,NextY,[(X,Y)|Perimeter]).
 
-next(control(x)) :-
-      t(control(o)).
+%se llego al punto inicial
+searchInit(InitX,InitY,_,InitX,InitY,Perimeter):-
+	forall(
+		member((X,Y),Perimeter),
+		assert(perimeter(X,Y))),
+	assert(perimeter(InitX,InitY)),
+	fail.
+%se busca el siguiente punto adyacente que sea del mismo dueño
+searchInit(InitX,InitY,R,X,Y,Perimeter):-
+	nextCellOfRole(X,Y,Perimeter,R,NextX,NextY),
+	searchInit(InitX,InitY,R,NextX,NextY,[(X,Y)|Perimeter]).
+%caso de fallo, no hay celda adyacente que controle R
 
-%Cambiamos las reglas pierde el que hace TATETI
-%goal(x,100) :- line(x),\+line(o).
-%goal(x,50) :-  \+line(x), \+line(o).
-%goal(x,0) :- \+line(x), line(o).
+	
+%todas las celdas adyacentes que sean del role R y 
+%sin devolver la anterior ni las fuera del tablero
+nextCellOfRole(X,Y,Perimeter,R,NextX,NextY):-
+	nearCell(X,Y,NextX,NextY),
+	indexXY(NextX,NextY),
+	\+member((NextX,NextY),Perimeter),
+	\+failedCell(NextX,NextY),
+	owner(R,O),
+	%R esta en la celda, es duenio de la celda o R va a estar en el siguiente turno en la celda
+	(t(cell(NextX,NextY,R)) ; t(cell(NextX,NextY,O)) ; nextPos(R,NextX,NextY)),
+	\+isInArea(NextX,NextY).
+nextCellOfRole(X,Y,_,_,_,_):-
+	assert(failedCell(X,Y)),
+	fail.
 
-%goal(o,100) :- \+line(x), line(o).
-%goal(o,50) :- \+line(x), \+line(o).
-%goal(o,0) :- line(x), \+line(o).
+%celdas adyacentes
+nearCell(X,Y,NextX,Y):- NextX is X + 1.	%down
+nearCell(X,Y,NextX,Y):- NextX is X - 1.	%up
+nearCell(X,Y,X,NextY):- NextY is Y + 1.	%right
+nearCell(X,Y,X,NextY):- NextY is Y - 1.	%left
+	
+%verifica si la celda esta dentro de la figura
+isInArea(X,Y):-
+	perimeter(X1,Y),
+	X1 > X,
+	perimeter(X2,Y),
+	X2 < X,
+	perimeter(X,Y1),
+	Y1 > Y,
+	perimeter(X,Y2),
+	Y2 < Y.
+	
+nextPos(R,NextX,NextY):-
+	does(R,Act),
+	t(cell(PreX,PreY,R)),
+	move(PreX,PreY,Act,NextX,NextY).
+	
+%verifica si el punto esta dentro de la matriz
+indexXY(X,Y):-
+	indexX(X),
+	indexY(Y).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	
+goal(R,Score):-role(R),t(score(R,Score)).
 
-goal(x,0) :- line(x),\+line(o).
-goal(x,50) :-  \+line(x), \+line(o).
-goal(x,100) :- \+line(x), line(o).
-
-goal(o,0) :- \+line(x), line(o).
-goal(o,50) :- \+line(x), \+line(o).
-goal(o,100) :- line(x), \+line(o).
-
-
-line(Z) :- row(_M,Z).
-    line(Z) :- column(_M,Z).
-    line(Z) :- diagonal(Z).
-
-    row(M,Z) :-
-      t(cell(M,1,Z)) ,
-      t(cell(M,2,Z)) ,
-      t(cell(M,3,Z)).
-
-    column(_M,Z) :-
-      t(cell(1,N,Z)) ,
-      t(cell(2,N,Z)) ,
-      t(cell(3,N,Z)).
-
-    diagonal(Z) :-
-      t(cell(1,1,Z)) ,
-      t(cell(2,2,Z)) ,
-      t(cell(3,3,Z)).
-
-    diagonal(Z) :-
-      t(cell(1,3,Z)) ,
-      t(cell(2,2,Z)) ,
-      t(cell(3,1,Z)).
-
- terminal :- line(x).
- terminal :- line(o).
- terminal :- \+open.
-
- open :- t(cell(X,Y,b)),
- index(X),
- index(Y).
+terminal:-
+	goalScore(GoalScore),
+	t(score(_,Score)),
+	Score >= GoalScore.
+	
+distinct(X,Y):-
+	X \== Y.
